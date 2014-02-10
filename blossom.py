@@ -120,9 +120,14 @@ class Blossom:
         self.level = level
         # Reference to the blossom directly containing this one.
         self.owner = None
+        # The cycle of blossoms this one consists of. Each element is a
+        # pair (blossom, edge connecting it to the next one). The first
+        # element is the base.
         self.cycle = tuple(cycle)
-        # References to parent and children in a tree.
+        # References to parent and children in a tree. For out-of-tree
+        # pairs the parent is a reference to the peer.
         self.parent = None
+        self.parent_edge = None
         self.children = []
 
     def __hash__(self):
@@ -150,6 +155,12 @@ class Blossom:
         if self.owner is not None:
             return self.owner.get_outermost_blossom()
         return self
+
+    def get_root(self):
+        assert self.level >= 0, "get_root called on out-of-tree blossom"
+        if self.parent is None:
+            return self
+        return self.parent.get_root()
 
     def get_max_delta(self):
         """
@@ -198,6 +209,36 @@ class Blossom:
             child.adjust_charge(delta)
 
     def increase_charge(self, delta):
+        self.charge += delta
+
+        # Find any newly-filled edges. Note that all edges with exactly
+        # zero remaining charge are newly-filled except the one leading to
+        # the parent (if any); edges to children exceed their capacity
+        # temporarily since the children's charges are not yet adjusted.
+        for e, v in self.outgoing_edges:
+            if e is self.parent_edge:
+                continue
+            if e.get_remaining_charge() != 0:
+                continue
+            other_blossom = v.get_outermost_blossom()
+            if other_blossom.level == -1:
+                self.attach_out_of_tree_pair(other_blossom)
+                continue
+            if other_blossom.get_root() == self.get_root():
+                self.shrink_with_peer(e, v)
+            else:
+                self.augment_matching(e, v)
+
+    def attach_out_of_tree_pair(self, target):
+        raise NotImplementedError()
+        # TODO: Don't forget to call adjust_charge(0) on target...
+
+    def shrink_with_peer(self, other, edge):
+        """Shrinks the cycle along given edge into a new blossom.
+        """
+        raise NotImplementedError()
+
+    def augment_matching(self, other, edge):
         raise NotImplementedError()
 
     def decrease_charge(self, delta):
