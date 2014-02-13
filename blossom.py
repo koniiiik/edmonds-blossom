@@ -5,6 +5,14 @@ import sys
 
 
 INF = float('inf')
+# Possible levels of blossoms.
+LEVEL_EVEN = 0
+LEVEL_ODD = 1
+# Out-of-tree blossoms; they always appear in pairs connected by a matched
+# edge.
+LEVEL_OOT = -1
+# Blossoms embedded in another blossom.
+LEVEL_EMBED = -2
 
 
 def cached_property(fun):
@@ -47,10 +55,18 @@ class EdgeNotIncident(EdgeTraversalError):
     """
 
 
+class TreeStructureChanged(Exception):
+    """
+    Used whenever the structure of an alternating tree is changed to abort
+    current traversal and initiate a new one.
+    """
+
+
 class Edge:
     def __init__(self, v1, v2, value):
         self.vertices = frozenset((v1, v2))
         self.value = value
+        self.selected = 0
 
     def __hash__(self):
         return hash((self.vertices, self.value))
@@ -107,12 +123,19 @@ class Edge:
     def get_remaining_charge(self):
         return self.value - self.calculate_charge()
 
+    def toggle_selection(self):
+        """Toggles the membership of self in the current matching.
+        """
+        assert self.get_remaining_charge() == 0, ("toggle_selection called "
+                                                  "on non-tight edge")
+        self.selected = 1 - self.selected
+
 
 class Blossom:
     # For nontrivial blossoms, the charge cannot decrease below 0.
     minimum_charge = 0
 
-    def __init__(self, cycle, charge=0, level=0):
+    def __init__(self, cycle, charge=0, level=LEVEL_EVEN):
         self.charge = fractions.Fraction(charge)
         # Whether the blossom is in an even or odd level of a tree. A
         # value of -1 indicates that the blossom is not in any tree and
@@ -131,6 +154,7 @@ class Blossom:
         self.children = []
 
     def __hash__(self):
+        # TODO: this is wrong, sometimes we need to reorder the cycle
         return hash(self.cycle)
 
     def __eq__(self, other):
@@ -157,7 +181,8 @@ class Blossom:
         return self
 
     def get_root(self):
-        assert self.level >= 0, "get_root called on out-of-tree blossom"
+        assert self.level in (LEVEL_EVEN, LEVEL_ODD), ("get_root called on "
+                                                       "an out-of-tree blossom")
         if self.parent is None:
             return self
         return self.parent.get_root()
@@ -167,10 +192,10 @@ class Blossom:
         Finds the maximum allowed charge adjust for this blossom and its
         children.
         """
-        if self.level == 1:
+        if self.level == LEVEL_ODD:
             # Blossoms on odd levels are going to be decreased.
             delta = self.charge - self.minimum_charge
-        elif self.level == 0:
+        elif self.level == LEVEL_EVEN:
             # Even levels get increased. We need to check each outgoing
             # edge.
             delta = INF
@@ -178,12 +203,12 @@ class Blossom:
                 b = v.get_outermost_blossom()
                 remaining = e.get_remaining_charge()
 
-                if b.level == 0:
+                if b.level == LEVEL_EVEN:
                     # Both ends of e are on even level, both get
                     # increased, therefore each can only get one half of
                     # remaining capacity.
                     delta = min(delta, remaining / 2)
-                elif b.level == -1:
+                elif b.level == LEVEL_OOT:
                     # The other end is an out-of-tree blossom whose charge
                     # remains the same.
                     delta = min(delta, remaining)
@@ -197,61 +222,82 @@ class Blossom:
         """
         Decides what is supposed to happen on charge adjusts and recurses.
         """
-        # Store the list of children for later; it might change during the
-        # execution of this method.
-        children = self.children
-        if self.level == 0:
-            self.increase_charge(delta)
-        elif self.level == 1:
-            self.decrease_charge(delta)
+        if self.level == LEVEL_EVEN:
+            self.charge += delta
+        elif self.level == LEVEL_ODD:
+            self.charge -= delta
+            assert self.charge >= self.minimum_charge, ("the charge of a "
+                                                        "blossom dropped "
+                                                        "below minimum")
 
-        for child in children:
+        for child in self.children:
             child.adjust_charge(delta)
 
-    def increase_charge(self, delta):
-        self.charge += delta
+    def alter_tree(self):
+        """Detects and handles the four cases where trees need to be altered.
+        """
+        if self.level == LEVEL_ODD and self.charge == 0:
+            self.expand()
+        elif self.level == LEVEL_EVEN:
+            self.handle_tight_edges()
+        else:
+            assert False, ("alter_tree called on blossom of level %d" %
+                           self.level)
 
-        # Find any newly-filled edges. Note that all edges with exactly
-        # zero remaining charge are newly-filled except the one leading to
-        # the parent (if any); edges to children exceed their capacity
-        # temporarily since the children's charges are not yet adjusted.
+        for child in self.children:
+            child.alter_tree()
+
+    def handle_tight_edges(self):
+        """Finds any fresh tight edges.
+
+        If a tight edge leads to an out-of-tree blossom, attach the pair
+        (P2).
+
+        If a tight edge leads to a blossom in the same tree as this one
+        (the root blossom is the same), shrink (P3).
+
+        If a tight edge leads to a blossom with a different root, augment
+        (P4).
+        """
+        assert self.level == LEVEL_EVEN, ("handle_tight_edges called on "
+                                          "non-even blossom.")
+
         for e, v in self.outgoing_edges:
             if e is self.parent_edge:
                 continue
-            if e.get_remaining_charge() != 0:
+            remaining_charge = e.get_remaining_charge()
+            assert remaining_charge >= 0, ("found an overcharged edge")
+            if get_remaining > 0:
                 continue
             other_blossom = v.get_outermost_blossom()
-            if other_blossom.level == -1:
+            if other_blossom.level == LEVEL_OOT:
                 self.attach_out_of_tree_pair(other_blossom)
                 continue
             if other_blossom.get_root() == self.get_root():
-                self.shrink_with_peer(e, v)
+                self.shrink_with_peer(other_blossom, e)
             else:
-                self.augment_matching(e, v)
+                self.augment_matching(other_blossom, e)
 
     def attach_out_of_tree_pair(self, target):
-        raise NotImplementedError()
-        # TODO: Don't forget to call adjust_charge(0) on target...
-
-    def shrink_with_peer(self, other, edge):
-        """Shrinks the cycle along given edge into a new blossom.
+        """Handles case (P2).
         """
         raise NotImplementedError()
 
-    def augment_matching(self, other, edge):
+    def shrink_with_peer(self, other, edge):
+        """Shrinks the cycle along given edge into a new blossom. (P3)
+        """
         raise NotImplementedError()
 
-    def decrease_charge(self, delta):
-        self.charge -= delta
-        assert self.charge >= self.minimum_charge, ("the charge of a "
-                                                    "blossom dropped "
-                                                    "below minimum")
-        if self.charge == 0:
-            self.expand()
+    def augment_matching(self, other_blossom, edge):
+        """Augments the matching along the alternating path containing given edge. (P4)
+        """
+        # Always look for a path of even length within a blossom. Recurse
+        # into sub-blossoms.
+        pass
 
     def expand(self):
         """
-        Expands this blossom back into its constituents.
+        Expands this blossom back into its constituents. (P1)
         """
         raise NotImplementedError()
 
