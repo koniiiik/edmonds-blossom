@@ -65,6 +65,7 @@ class TreeStructureChanged(Exception):
     current traversal and initiate a new one.
     """
 
+
 class StructureUpToDate(Exception):
     """
     This gets raised as soon as the structure of all trees is up-to-date,
@@ -281,7 +282,7 @@ class Blossom:
                 continue
             remaining_charge = e.get_remaining_charge()
             assert remaining_charge >= 0, ("found an overcharged edge")
-            if get_remaining > 0:
+            if remaining_charge > 0:
                 continue
             other_blossom = v.get_outermost_blossom()
             if other_blossom.level == LEVEL_OOT:
@@ -447,12 +448,12 @@ class Blossom:
 
         prev_vertex = v1
         for j in range(start + 1, finish):
-            edge = cycle[j].parent_edge
-            sub_calls.append((cycle[j - 1], prev_vertex,
-                              edge.traverse_from(cycle[j])))
+            edge = self.cycle[j].parent_edge
+            sub_calls.append((self.cycle[j - 1], prev_vertex,
+                              edge.traverse_from(self.cycle[j])))
             edges.append(edge)
-            prev_vertex = edge.traverse_from(cycle[j - 1])
-        sub_calls.append(cycle[finish], prev_vertex, v2)
+            prev_vertex = edge.traverse_from(self.cycle[j - 1])
+        sub_calls.append(self.cycle[finish], prev_vertex, v2)
 
         assert len(sub_calls) % 2 == 1
         assert len(edges) % 2 == 0
@@ -527,7 +528,7 @@ class Blossom:
             # the tree.
             prev_parent, prev_edge = self.parent, self.parent_edge
             for j in range(i, -1, -1):
-                b = cycle[j]
+                b = self.cycle[j]
                 assert b.level == LEVEL_EMBED
                 assert prev_parent.level in (LEVEL_EVEN, LEVEL_ODD)
                 assert b.owner is self
