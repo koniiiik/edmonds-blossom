@@ -80,10 +80,10 @@ class Edge:
         self.selected = 0
 
     def __hash__(self):
-        return hash((self.vertices, self.value))
+        return hash(id(self))
 
     def __eq__(self, other):
-        return (self.vertices, self.value) == (other.vertices, other.value)
+        return self is other
 
     def __str__(self):
         return "(%d, %d)" % sorted(v.id for v in self.vertices)
@@ -166,11 +166,10 @@ class Blossom:
         self.children = set()
 
     def __hash__(self):
-        # TODO: this is wrong, sometimes we need to reorder the cycle
-        return hash(self.cycle)
+        return hash(id(self))
 
     def __eq__(self, other):
-        return self.cycle == other.cycle
+        return self is other
 
     @cached_property
     def outgoing_edges(self):
@@ -584,12 +583,6 @@ class Vertex(Blossom):
         self.id = id
         self.edges = []
         super().__init__(cycle=[self], charge=0)
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def __eq__(self, other):
-        return self.id == other.id
 
     def add_edge_to(self, other, value):
         e = Edge(self, other, value)
