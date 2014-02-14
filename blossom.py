@@ -305,7 +305,54 @@ class Blossom:
     def shrink_with_peer(self, other, edge):
         """Shrinks the cycle along given edge into a new blossom. (P3)
         """
-        raise NotImplementedError()
+        assert self.level == LEVEL_EVEN
+        # Find the closest common ancestor and the chains of parents
+        # leading to them.
+        ancestors, parent_chain1, parent_chain2 = dict(), [], []
+        blossom = self
+        while blossom is not None:
+            ancestors[blossom] = len(parent_chain1)
+            parent_chain1.append(blossom)
+            blossom = blossom.parent
+
+        blossom = other
+        while blossom not in ancestors:
+            parent_chain2.append(blossom)
+            blossom = blossom.parent
+
+        common_ancestor = parent_chain2[-1]
+        # Repoint the parent references in parent_chain2 to point in the
+        # other direction. This will close the cycle.
+        prev_edge, prev_blossom = edge, self
+        for blossom in parent_chain2:
+            prev_edge, prev_blossom, blossom.parent, blossom.parent_edge = (
+                blossom.parent_edge, blossom, prev_blossom, prev_edge
+            )
+
+        # The cycle now consists of the reverse of parent_chain1 up to and
+        # including common_ancestor + parent_chain2 sans common_ancestor.
+        cycle = parent_chain1[ancestors[common_ancestor]::-1] + parent_chain2[:-1]
+
+        new_parent = common_ancestor.parent
+        new_parent_edge = common_ancestor.parent_edge
+        new_blossom = Blossom(cycle)
+        for blossom in cycle:
+            new_blossom.children.update(blossom.children)
+            blossom.owner = new_blossom
+            new_blossom.children.clear()
+            new_blossom.level = LEVEL_EMBED
+
+        if new_parent is not None:
+            registry = roots
+        else:
+            registry = new_parent.children
+
+        registry.remove(common_ancestor)
+        registry.add(new_blossom)
+        new_blossom.parent = new_parent
+        new_blossom.parent_edge = new_parent_edge
+
+        raise TreeStructureChanged("Shrunk cycle on edge %s" % edge)
 
     def augment_matching(self, other_blossom, edge):
         """Augments the matching along the alternating path containing given edge. (P4)
