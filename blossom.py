@@ -253,8 +253,9 @@ class Blossom:
     def alter_tree(self):
         """Detects and handles the four cases where trees need to be altered.
         """
-        if self.level == LEVEL_ODD and self.charge == 0:
-            self.expand()
+        if self.level == LEVEL_ODD:
+            if self.charge == 0:
+                self.expand()
         elif self.level == LEVEL_EVEN:
             self.handle_tight_edges()
         else:
@@ -311,6 +312,7 @@ class Blossom:
         target.parent_edge = edge
         target.level = LEVEL_ODD
         target_peer.level = LEVEL_EVEN
+        target.children.add(target_peer)
         assert len(target_peer.children) == 0
         raise TreeStructureChanged("Attached blossom on edge %s" % edge)
 
