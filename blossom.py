@@ -86,7 +86,7 @@ class Edge:
         return self is other
 
     def __str__(self):
-        return "(%d, %d)" % sorted(v.id for v in self.vertices)
+        return "(%d, %d)" % tuple(sorted(v.id for v in self.vertices))
 
     def traverse_from(self, v):
         """Returns the other endpoint of an edge.
@@ -170,6 +170,9 @@ class Blossom:
 
     def __eq__(self, other):
         return self is other
+
+    def __str__(self):
+        return "(%s)" % (' '.join(str(b) for b in self.cycle))
 
     @cached_property
     def outgoing_edges(self):
@@ -583,6 +586,9 @@ class Vertex(Blossom):
         self.id = id
         self.edges = []
         super().__init__(cycle=[self], charge=0)
+
+    def __str__(self):
+        return "%d" % (self.id,)
 
     def add_edge_to(self, other, value):
         e = Edge(self, other, value)
