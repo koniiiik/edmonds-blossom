@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+An implementation of Edmonds' blossom algorithm for finding minimum-weight
+maximum matchings.
+"""
 import fractions
 import functools
 import sys
@@ -74,6 +78,9 @@ class Edge:
     def __eq__(self, other):
         return (self.vertices, self.value) == (other.vertices, other.value)
 
+    def __str__(self):
+        return "(%d, %d)" % sorted(v.id for v in self.vertices)
+
     def traverse_from(self, v):
         """Returns the other endpoint of an edge.
 
@@ -137,21 +144,19 @@ class Blossom:
 
     def __init__(self, cycle, charge=0, level=LEVEL_EVEN):
         self.charge = fractions.Fraction(charge)
-        # Whether the blossom is in an even or odd level of a tree. A
-        # value of -1 indicates that the blossom is not in any tree and
-        # has a single outgoing tight edge which is matched.
         self.level = level
         # Reference to the blossom directly containing this one.
         self.owner = None
-        # The cycle of blossoms this one consists of. Each element is a
-        # pair (blossom, edge connecting it to the next one). The first
-        # element is the base.
+        # The cycle of blossoms this one consists of. The first element is
+        # the base.
         self.cycle = tuple(cycle)
+        assert len(self.cycle) % 2 == 1
         # References to parent and children in a tree. For out-of-tree
-        # pairs the parent is a reference to the peer.
+        # pairs the parent is a reference to the peer. For embedded
+        # blossoms the parent is the predecessor in the cycle.
         self.parent = None
         self.parent_edge = None
-        self.children = []
+        self.children = set()
 
     def __hash__(self):
         # TODO: this is wrong, sometimes we need to reorder the cycle
@@ -186,6 +191,9 @@ class Blossom:
         if self.parent is None:
             return self
         return self.parent.get_root()
+
+    def get_base_vertex(self):
+        return self.cycle[0].get_base_vertex()
 
     def get_max_delta(self):
         """
@@ -293,7 +301,142 @@ class Blossom:
         """
         # Always look for a path of even length within a blossom. Recurse
         # into sub-blossoms.
-        pass
+        assert edge.selected == 0, ("trying to augment via an already "
+                                    "selected edge")
+        self.flip_root_path(edge)
+        other_blossom.flip_path(edge)
+        edge.toggle_selection()
+        raise TreeStructureChanged("Augmented on edge %s" % edge)
+
+    def flip_root_path(self, edge):
+        """Flips edge selection on the alternating path from self to root.
+
+        Argument edge is the edge from a child from which the alternating
+        path leads through self.
+
+        The children of this blossom are detached and this blossom becomes
+        part of an out-of-tree pair around the given edge.
+        """
+        assert self.level in (LEVEL_EVEN, LEVEL_ODD)
+        v1 = self.get_base_vertex()
+        if self.level == LEVEL_EVEN:
+            v2 = next(iter(self.members & edge.vertices))
+        else:
+            v2 = next(iter(self.members & self.parent_edge.vertices))
+
+        self.flip_alternating_path(v1, v2)
+
+        if self.level == LEVEL_EVEN:
+            self.detach_children()
+            # Become a peer to the blossom on the other side of edge.
+            self.detach_from_parent(edge)
+        else:
+            # Adjust self to become a peer to our parent.
+            # Our child should be detached by now.
+            assert len(self.children) == 0
+            assert self.parent is not None
+            self.parent.children.remove(self)
+            self.level = LEVEL_OOT
+
+        if self.parent is not None:
+            self.parent_edge.toggle_selection()
+            self.parent.flip_root_path(self.parent_edge)
+        else:
+            roots.remove(self)
+
+    def flip_alternating_path(self, v1, v2):
+        """Flips edge selection on the alternating path from v1 to v2.
+
+        v1 and v2 are the two vertices at the boundaries of this blossom
+        along the augmenting alternating path. One of the two vertices
+        needs to be the base of this blossom.
+        """
+        assert v1 in self.members
+        assert v2 in self.members
+        if v1 is v2:
+            return
+
+        if v1 not in self.cycle[0]:
+            v1, v2 = v2, v1
+
+        # v1 is in the base blossom, find the blossom containing v2
+        for i, b in enumerate(self.cycle):
+            if v2 in b.members:
+                break
+
+        # Trivial case: if both v1 and v2 are in the same blossom, we
+        # don't need to do anything at this level.
+        if i == 0:
+            self.cycle[0].flip_alternating_path(v1, v2)
+            return
+
+        # self.cycle has odd length, pick the direction in which the path
+        # from cycle[i] to cycle[0] has even length.
+        sub_calls, edges = [], []
+        if i % 2 == 0:
+            # Proceed from the base forwards toward self.cycle[i].
+            start, finish = 0, i
+        else:
+            # Proceed from self.cycle[i] forwards toward base.
+            start, finish = i - len(self.cycle), 0
+            v1, v2 = v2, v1
+
+        prev_vertex = v1
+        for j in range(start + 1, finish):
+            edge = cycle[j].parent_edge
+            sub_calls.append((cycle[j - 1], prev_vertex,
+                              edge.traverse_from(cycle[j])))
+            edges.append(edge)
+            prev_vertex = edge.traverse_from(cycle[j - 1])
+        sub_calls.append(cycle[finish], prev_vertex, v2)
+
+        assert len(sub_calls) % 2 == 1
+        assert len(edges) % 2 == 0
+
+        for e in edges:
+            e.toggle_selection()
+        for blossom, x1, x2 in sub_calls:
+            blossom.flip_alternating_path(x1, x2)
+
+        # Shift self.cycle to new base to keep the invariant that cycle[0]
+        # is the base. cycle[i] should become cycle[0].
+        self.cycle = self.cycle[i:] + self.cycle[:i]
+
+    def detach_children(self):
+        """Detaches all children and turns them into out-of-tree pairs.
+        """
+        # We need to make a copy of self.children here since it gets
+        # modified in each iteration.
+        for child in list(self.children):
+            child.detach_from_parent()
+
+    def detach_from_parent(self, edge=None):
+        """Detaches itself from the parent and forms an out-of-tree pair.
+
+        If called on an odd blossom, edge needs to be None and the only
+        child will be chosen. Otherwise, an edge leading to a peer needs
+        to be supplied.
+
+        If an edge is specified, we assume the peer adjusts itself,
+        otherwise we also adjust the single child that becomes the peer.
+        """
+        assert (self.level == LEVEL_ODD) ^ (edge is None)
+
+        self.parent.children.remove(self)
+        if edge is not None:
+            peer = edge.traverse_from(self).get_outermost_blossom()
+            self.detach_children()
+        else:
+            peer = next(iter(self.children))
+            self.children.clear()
+        self.level = LEVEL_OOT
+        self.parent = peer
+        if edge is None:
+            self.parent_edge = peer.parent_edge
+            peer.level = LEVEL_OOT
+            peer.detach_children()
+        else:
+            self.parent_edge = edge
 
     def expand(self):
         """
@@ -309,7 +452,7 @@ class Vertex(Blossom):
     def __init__(self, id):
         self.id = id
         self.edges = []
-        super().__init__(cycle=None, charge=0)
+        super().__init__(cycle=[self], charge=0)
 
     def __hash__(self):
         return hash(self.id)
@@ -329,6 +472,9 @@ class Vertex(Blossom):
     @property
     def members(self):
         return {self}
+
+    def get_base_vertex(self):
+        return self
 
     def expand(self):
         # For simple vertices this is a no-op.
