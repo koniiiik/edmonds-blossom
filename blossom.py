@@ -500,7 +500,73 @@ class Blossom:
         """
         Expands this blossom back into its constituents. (P1)
         """
-        raise NotImplementedError()
+        assert self.level == LEVEL_ODD
+        assert self.charge == 0
+
+        base = self.cycle[0]
+        # Since self is odd, it has exactly one child.
+        assert len(self.children) == 1
+        child = next(iter(self.children))
+        assert child.level == LEVEL_EVEN
+        child.parent = base
+
+        # Find the component connected to parent.
+        boundary_vertex = next(iter(self.parent_edge.vertices & self.members))
+        for i, blossom in enumerate(self.cycle):
+            if boundary_vertex in blossom.members:
+                break
+
+        if i % 2 == 0:
+            # Repoint the even-length part of the cycle to form a part of
+            # the tree.
+            prev_parent, prev_edge = self.parent, self.parent_edge
+            for j in range(i, -1, -1):
+                b = cycle[j]
+                assert b.level == LEVEL_EMBED
+                assert prev_parent.level in (LEVEL_EVEN, LEVEL_ODD)
+                assert b.owner is self
+                b.level = 1 - prev_parent.level
+                b.owner = None
+                prev_parent, prev_edge, b.parent, b.parent_edge = (
+                    b, b.parent_edge, prev_parent, prev_edge
+                )
+            pairs_start, pairs_end = i + 1 - len(self.cycle), 0
+        else:
+            # The even part of our cycle has the correct pointers already,
+            # fix their levels.
+            blossom.parent = self.parent
+            blossom.parent_edge = self.parent_edge
+            for j in range(i - 1, 1):
+                b = self.cycle[j]
+                assert b.level == LEVEL_EMBED
+                assert b.parent.level in (LEVEL_EVEN, LEVEL_ODD)
+                assert b.owner is self
+                b.level = 1 - b.parent.level
+                b.owner = None
+            pairs_start, pairs_end = 1, i
+
+        # Turn the odd-length part of the cycle into out-of-tree pairs.
+        for j in range(pairs_start, pairs_end, 2):
+            b = self.cycle[j]
+            peer = b.parent
+            assert b.level == LEVEL_EMBED
+            assert b.parent.level == LEVEL_EMBED
+            assert b.owner is self
+            assert peer.owner is self
+            assert len(b.children) == 0
+            assert len(peer.children) == 0
+            peer.parent, peer.parent_edge = b, b.parent_edge
+            b.owner = peer.owner = None
+            b.level = peer.level = LEVEL_OOT
+
+        if self.parent is None:
+            registry = roots
+        else:
+            registry = self.parent.children
+        registry.remove(self)
+        registry.add(self.cycle[i])
+
+        raise TreeStructureChanged("Expanded a blossom")
 
 
 class Vertex(Blossom):
