@@ -370,6 +370,9 @@ class Blossom:
             blossom.children.clear()
             blossom.level = LEVEL_EMBED
 
+        for child in new_blossom.children:
+            child.parent = new_blossom
+
         if new_parent is None:
             registry = roots
         else:
