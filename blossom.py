@@ -69,7 +69,7 @@ class TreeStructureChanged(Exception):
 class StructureUpToDate(Exception):
     """
     This gets raised as soon as the structure of all trees is up-to-date,
-    i.e. there are no more instances of anyof the four cases.
+    i.e. there are no more instances of any of the four cases.
     """
 
 
@@ -283,10 +283,13 @@ class Blossom:
             if e is self.parent_edge:
                 continue
             remaining_charge = e.get_remaining_charge()
-            assert remaining_charge >= 0, ("found an overcharged edge")
+            assert remaining_charge >= 0, "found an overcharged edge"
             if remaining_charge > 0:
                 continue
             other_blossom = v.get_outermost_blossom()
+            if other_blossom.level == LEVEL_ODD:
+                assert other_blossom in self.children
+                continue
             if other_blossom.level == LEVEL_OOT:
                 self.attach_out_of_tree_pair(other_blossom, e)
                 continue
@@ -371,7 +374,7 @@ class Blossom:
         assert edge.selected == 0, ("trying to augment via an already "
                                     "selected edge")
         self.flip_root_path(edge)
-        other_blossom.flip_path(edge)
+        other_blossom.flip_root_path(edge)
         edge.toggle_selection()
         raise TreeStructureChanged("Augmented on edge %s" % edge)
 
@@ -393,6 +396,10 @@ class Blossom:
 
         self.flip_alternating_path(v1, v2)
 
+        # We need to store these values because detach_from_parent
+        # modifies them and we need to recurse later.
+        prev_parent, prev_parent_edge = self.parent, self.parent_edge
+
         if self.level == LEVEL_EVEN:
             self.detach_children()
             # Become a peer to the blossom on the other side of edge.
@@ -405,11 +412,9 @@ class Blossom:
             self.parent.children.remove(self)
             self.level = LEVEL_OOT
 
-        if self.parent is not None:
-            self.parent_edge.toggle_selection()
-            self.parent.flip_root_path(self.parent_edge)
-        else:
-            roots.remove(self)
+        if prev_parent is not None:
+            prev_parent_edge.toggle_selection()
+            prev_parent.flip_root_path(prev_parent_edge)
 
     def flip_alternating_path(self, v1, v2):
         """Flips edge selection on the alternating path from v1 to v2.
@@ -455,7 +460,7 @@ class Blossom:
                               edge.traverse_from(self.cycle[j])))
             edges.append(edge)
             prev_vertex = edge.traverse_from(self.cycle[j - 1])
-        sub_calls.append(self.cycle[finish], prev_vertex, v2)
+        sub_calls.append((self.cycle[finish], prev_vertex, v2))
 
         assert len(sub_calls) % 2 == 1
         assert len(edges) % 2 == 0
@@ -487,9 +492,12 @@ class Blossom:
         If an edge is specified, we assume the peer adjusts itself,
         otherwise we also adjust the single child that becomes the peer.
         """
-        assert (self.level == LEVEL_ODD) ^ (edge is None)
+        assert (self.level == LEVEL_ODD) ^ (edge is not None)
 
-        self.parent.children.remove(self)
+        if self.parent is not None:
+            self.parent.children.remove(self)
+        else:
+            roots.remove(self)
         if edge is not None:
             peer = edge.traverse_from(self).get_outermost_blossom()
             self.detach_children()
@@ -670,7 +678,7 @@ except MaximumDualReached:
     pass
 
 M = set()
-for v in vertices:
+for v in vertices.values():
     M.update(e for e in v.edges if e.selected)
 
 total_weight = sum(e.value for e in M)
