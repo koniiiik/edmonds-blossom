@@ -279,17 +279,28 @@ class Blossom:
                 continue
             other_blossom = v.get_outermost_blossom()
             if other_blossom.level == LEVEL_OOT:
-                self.attach_out_of_tree_pair(other_blossom)
+                self.attach_out_of_tree_pair(other_blossom, e)
                 continue
             if other_blossom.get_root() == self.get_root():
                 self.shrink_with_peer(other_blossom, e)
             else:
                 self.augment_matching(other_blossom, e)
 
-    def attach_out_of_tree_pair(self, target):
+    def attach_out_of_tree_pair(self, target, edge):
         """Handles case (P2).
         """
-        raise NotImplementedError()
+        assert self.level == LEVEL_EVEN
+        assert target.level == LEVEL_OOT
+        assert len(target.children) == 0
+
+        self.children.add(target)
+        target_peer = target.parent
+        target.parent = self
+        target.parent_edge = edge
+        target.level = LEVEL_ODD
+        target_peer.level = LEVEL_EVEN
+        assert len(target_peer.children) == 0
+        raise TreeStructureChanged("Attached blossom on edge %s" % edge)
 
     def shrink_with_peer(self, other, edge):
         """Shrinks the cycle along given edge into a new blossom. (P3)
