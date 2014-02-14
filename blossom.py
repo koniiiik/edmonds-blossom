@@ -289,7 +289,9 @@ class Blossom:
                 continue
             other_blossom = v.get_outermost_blossom()
             if other_blossom.level == LEVEL_ODD:
-                assert other_blossom in self.children
+                # This blossom can be from a different tree -- we don't
+                # particularly care. The charge adjusts will be
+                # compensated anyway.
                 continue
             if other_blossom.level == LEVEL_OOT:
                 self.attach_out_of_tree_pair(other_blossom, e)
