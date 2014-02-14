@@ -638,6 +638,10 @@ def get_max_delta():
     Returns the maximal value by which we can improve the dual solution
     by adjusting charges on alternating trees.
     """
+    if len(roots) == 0:
+        # All blossoms are matched.
+        raise MaximumDualReached()
+
     delta = INF
     for root in roots:
         delta = min(delta, root.get_max_delta())
@@ -696,5 +700,6 @@ for v in vertices.values():
     M.update(e for e in v.edges if e.selected)
 
 total_weight = sum(e.value for e in M)
+print(total_weight)
 for e in M:
     print("%s %d" % (e, e.value))
