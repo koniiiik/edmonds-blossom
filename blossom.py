@@ -442,7 +442,7 @@ class Blossom:
         if v1 is v2:
             return
 
-        if v1 not in self.cycle[0]:
+        if v1 not in self.cycle[0].members:
             v1, v2 = v2, v1
 
         # v1 is in the base blossom, find the blossom containing v2
@@ -468,12 +468,12 @@ class Blossom:
             v1, v2 = v2, v1
 
         prev_vertex = v1
-        for j in range(start + 1, finish):
-            edge = self.cycle[j].parent_edge
-            sub_calls.append((self.cycle[j - 1], prev_vertex,
-                              edge.traverse_from(self.cycle[j])))
+        for j in range(start, finish):
+            edge = self.cycle[j + 1].parent_edge
+            sub_calls.append((self.cycle[j], prev_vertex,
+                              edge.traverse_from(self.cycle[j + 1])))
             edges.append(edge)
-            prev_vertex = edge.traverse_from(self.cycle[j - 1])
+            prev_vertex = edge.traverse_from(self.cycle[j])
         sub_calls.append((self.cycle[finish], prev_vertex, v2))
 
         assert len(sub_calls) % 2 == 1
