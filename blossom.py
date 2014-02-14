@@ -65,6 +65,12 @@ class TreeStructureChanged(Exception):
     current traversal and initiate a new one.
     """
 
+class StructureUpToDate(Exception):
+    """
+    This gets raised as soon as the structure of all trees is up-to-date,
+    i.e. there are no more instances of anyof the four cases.
+    """
+
 
 class Edge:
     def __init__(self, v1, v2, value):
@@ -605,7 +611,7 @@ class Vertex(Blossom):
         pass
 
 
-def get_max_delta(roots):
+def get_max_delta():
     """
     Returns the maximal value by which we can improve the dual solution
     by adjusting charges on alternating trees.
@@ -614,34 +620,59 @@ def get_max_delta(roots):
     for root in roots:
         delta = min(delta, root.get_max_delta())
 
+    assert delta >= 0
+
     if not delta > 0:
         raise MaximumDualReached()
 
     return delta
 
-# Input parsing
 
-N, M = [int(x) for x in next(sys.stdin).split()]
-vertices = dict()
-max_weight = 0
+def read_input():
+    N, M = [int(x) for x in next(sys.stdin).split()]
+    vertices = dict()
+    max_weight = 0
 
-for line in sys.stdin:
-    u, v, w = [int(x) for x in line.split()]
-    for _v in (u, v):
-        if _v not in vertices:
-            vertices[_v] = Vertex(_v)
+    for line in sys.stdin:
+        u, v, w = [int(x) for x in line.split()]
+        for _v in (u, v):
+            if _v not in vertices:
+                vertices[_v] = Vertex(_v)
 
-    u, v = vertices[u], vertices[v]
-    u.add_edge_to(v, fractions.Fraction(w))
+        u, v = vertices[u], vertices[v]
+        u.add_edge_to(v, fractions.Fraction(w))
 
+    return vertices
+
+
+def update_tree_structures():
+    try:
+        while True:
+            try:
+                for root in roots:
+                    root.alter_tree()
+                raise StructureUpToDate()
+            except TreeStructureChanged:
+                pass
+    except StructureUpToDate:
+        pass
+
+
+vertices = read_input()
 roots = set(vertices.values())
-
-# The main cycle
-
 try:
     while True:
-        delta = get_max_delta(roots)
+        delta = get_max_delta()
         for root in roots:
             root.adjust_charge(delta)
+        update_tree_structures()
 except MaximumDualReached:
     pass
+
+M = set()
+for v in vertices:
+    M.update(e for e in v.edges if e.selected)
+
+total_weight = sum(e.value for e in M)
+for e in M:
+    print("%s %d" % (e, e.value))
