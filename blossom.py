@@ -320,6 +320,7 @@ class Blossom:
         """Shrinks the cycle along given edge into a new blossom. (P3)
         """
         assert self.level == LEVEL_EVEN
+        assert other.level == LEVEL_EVEN
         # Find the closest common ancestor and the chains of parents
         # leading to them.
         ancestors, parent_chain1, parent_chain2 = dict(), [], []
@@ -334,7 +335,20 @@ class Blossom:
             parent_chain2.append(blossom)
             blossom = blossom.parent
 
-        common_ancestor = parent_chain2[-1]
+        parent_chain2.append(blossom)
+        common_ancestor = blossom
+        # We need to store these values here since they get rewritten in the
+        # following loop.
+        new_parent = common_ancestor.parent
+        new_parent_edge = common_ancestor.parent_edge
+
+        # Remove references to other components of the new blossom from each
+        # component's children list.
+        for blossom in (self, other):
+            while blossom is not common_ancestor:
+                blossom.parent.children.remove(blossom)
+                blossom = blossom.parent
+
         # Repoint the parent references in parent_chain2 to point in the
         # other direction. This will close the cycle.
         prev_edge, prev_blossom = edge, self
@@ -347,16 +361,14 @@ class Blossom:
         # including common_ancestor + parent_chain2 sans common_ancestor.
         cycle = parent_chain1[ancestors[common_ancestor]::-1] + parent_chain2[:-1]
 
-        new_parent = common_ancestor.parent
-        new_parent_edge = common_ancestor.parent_edge
         new_blossom = Blossom(cycle)
         for blossom in cycle:
             new_blossom.children.update(blossom.children)
             blossom.owner = new_blossom
-            new_blossom.children.clear()
-            new_blossom.level = LEVEL_EMBED
+            blossom.children.clear()
+            blossom.level = LEVEL_EMBED
 
-        if new_parent is not None:
+        if new_parent is None:
             registry = roots
         else:
             registry = new_parent.children
