@@ -73,7 +73,7 @@ class StructureUpToDate(Exception):
     """
 
 
-class Edge:
+class Edge(object):
     def __init__(self, v1, v2, value):
         self.vertices = frozenset((v1, v2))
         self.value = value
@@ -148,7 +148,7 @@ class Edge:
         self.selected = 1 - self.selected
 
 
-class Blossom:
+class Blossom(object):
     # For nontrivial blossoms, the charge cannot decrease below 0.
     minimum_charge = 0
 
@@ -624,7 +624,7 @@ class Vertex(Blossom):
     def __init__(self, id):
         self.id = id
         self.edges = []
-        super().__init__(cycle=[self], charge=0)
+        super(Vertex, self).__init__(cycle=[self], charge=0)
 
     def __str__(self):
         return "%d" % (self.id,)
@@ -724,4 +724,4 @@ for v in vertices.values():
 total_weight = sum(e.value for e in M)
 print(total_weight)
 for e in M:
-    print("%s %d" % (e, e.value))
+    print("%s %s" % (e, e.value))
