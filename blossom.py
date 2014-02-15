@@ -545,6 +545,7 @@ class Blossom:
         child = next(iter(self.children))
         assert child.level == LEVEL_EVEN
         child.parent = base
+        base.children.add(child)
 
         # Find the component connected to parent.
         boundary_vertex = next(iter(self.parent_edge.vertices & self.members))
@@ -566,23 +567,23 @@ class Blossom:
                 prev_parent, prev_edge, b.parent, b.parent_edge = (
                     b, b.parent_edge, prev_parent, prev_edge
                 )
-            pairs_start, pairs_end = i + 1 - len(self.cycle), 0
+            pairs_start, pairs_end = -1, i - len(self.cycle)
         else:
             # The even part of our cycle has the correct pointers already,
-            # fix their levels.
+            # fix their levels and ownership.
             blossom.parent = self.parent
             blossom.parent_edge = self.parent_edge
-            for j in range(i - 1, 1):
+            for j in range(i - len(self.cycle), 1):
                 b = self.cycle[j]
                 assert b.level == LEVEL_EMBED
                 assert b.parent.level in (LEVEL_EVEN, LEVEL_ODD)
                 assert b.owner is self
                 b.level = 1 - b.parent.level
                 b.owner = None
-            pairs_start, pairs_end = 1, i
+            pairs_start, pairs_end = i - 1, 0
 
         # Turn the odd-length part of the cycle into out-of-tree pairs.
-        for j in range(pairs_start, pairs_end, 2):
+        for j in range(pairs_start, pairs_end, -2):
             b = self.cycle[j]
             peer = b.parent
             assert b.level == LEVEL_EMBED
