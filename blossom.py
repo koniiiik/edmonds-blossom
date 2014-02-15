@@ -710,7 +710,7 @@ roots = set(vertices.values())
 try:
     while True:
         delta = get_max_delta()
-        print("Adjusting by %s" % (delta,))
+        sys.stderr.write("Adjusting by %s\n" % (delta,))
         for root in roots:
             root.adjust_charge(delta)
         update_tree_structures()
