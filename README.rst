@@ -10,4 +10,4 @@ algorithms course. It is written in Python and has been tested on CPython
 The code is not really optimized, it takes a little more than a minute to
 calculate the result for a graph on 1000 vertices with 10495 edges on
 PyPy; the time it takes for a complete graph on 1002 vertices on my laptop
-will be added once it finishes.
+is about 45 minutes on PyPy and nearly six hours on CPython 3.3.
