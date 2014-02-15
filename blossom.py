@@ -88,6 +88,9 @@ class Edge:
     def __str__(self):
         return "(%d, %d)" % tuple(sorted(v.id for v in self.vertices))
 
+    def __repr__(self):
+        return "<Edge: %s>" % (str(self),)
+
     def traverse_from(self, v):
         """Returns the other endpoint of an edge.
 
@@ -173,6 +176,9 @@ class Blossom:
 
     def __str__(self):
         return "(%s)" % (' '.join(str(b) for b in self.cycle))
+
+    def __repr__(self):
+        return "<%s: %s>" % (self.__class__.__name__, str(self))
 
     @cached_property
     def outgoing_edges(self):
@@ -660,12 +666,12 @@ def get_max_delta():
     return delta
 
 
-def read_input():
-    N, M = [int(x) for x in next(sys.stdin).split()]
+def read_input(input_file):
+    N, M = [int(x) for x in next(input_file).split()]
     vertices = dict()
     max_weight = 0
 
-    for line in sys.stdin:
+    for line in input_file:
         u, v, w = [int(x) for x in line.split()]
         for _v in (u, v):
             if _v not in vertices:
@@ -690,11 +696,16 @@ def update_tree_structures():
         pass
 
 
-vertices = read_input()
+if len(sys.argv) > 1:
+    input_file = open(sys.argv[1])
+else:
+    input_file = sys.stdin
+vertices = read_input(input_file)
 roots = set(vertices.values())
 try:
     while True:
         delta = get_max_delta()
+        print("Adjusting by %s" % (delta,))
         for root in roots:
             root.adjust_charge(delta)
         update_tree_structures()
