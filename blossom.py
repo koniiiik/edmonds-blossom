@@ -336,11 +336,13 @@ class Blossom:
         while blossom is not None:
             ancestors[blossom] = len(parent_chain1)
             parent_chain1.append(blossom)
+            assert blossom.parent is None or blossom in blossom.parent.children
             blossom = blossom.parent
 
         blossom = other
         while blossom not in ancestors:
             parent_chain2.append(blossom)
+            assert blossom.parent is None or blossom in blossom.parent.children
             blossom = blossom.parent
 
         parent_chain2.append(blossom)
@@ -570,6 +572,8 @@ class Blossom:
                 assert b.owner is self
                 b.level = 1 - prev_parent.level
                 b.owner = None
+                if prev_parent is not None:
+                    prev_parent.children.add(b)
                 prev_parent, prev_edge, b.parent, b.parent_edge = (
                     b, b.parent_edge, prev_parent, prev_edge
                 )
@@ -585,6 +589,7 @@ class Blossom:
                 assert b.parent.level in (LEVEL_EVEN, LEVEL_ODD)
                 assert b.owner is self
                 b.level = 1 - b.parent.level
+                b.parent.children.add(b)
                 b.owner = None
             pairs_start, pairs_end = i - 1, 0
 
